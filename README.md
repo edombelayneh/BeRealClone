@@ -1,47 +1,41 @@
-# Project 2 - *Name of App Here*
+# Project 2 - *BeReal Clone*
 
-Submitted by: **Your Name Here**
+Submitted by: **Edom**
 
-**Name of your app** is an app that ... [TODO] 
+**BeReal** is an iOS social media app where users can create accounts, log in, and share posts with a photo and caption. The app displays a feed of user posts, supports authentication, and integrates with Parse backend for data persistence. Images are uploaded as ParseFiles and displayed in a custom feed cell.
 
-Time spent: **X** hours spent in total
+Time spent: **8** hours spent in total
 
 ## Required Features
 
 The following **required** functionality is completed:
 
-- [ ] Users see an app icon in the home screen and a styled launch screen.
-- [ ] User can register a new account
-- [ ] User can log in with newly created account
-- [ ] App has a feed of posts when user logs in
-- [ ] User can upload a new post which takes in a picture from photo library and an optional caption	
-- [ ] User is able to logout	
+- [x] Users see an app icon in the home screen and a styled launch screen.
+- [x] User can register a new account
+- [x] User can log in with newly created account
+- [x] App has a feed of posts when user logs in
+- [x] User can upload a new post which takes in a picture from photo library and an optional caption	
+- [x] User is able to logout	
  
 The following **optional** features are implemented:
 
-- [ ] Users can pull to refresh their feed and see a loading indicator
-- [ ] Users can infinite-scroll in their feed to see past the 10 most recent photos
-- [ ] Users can see location and time of photo upload in the feed	
-- [ ] User stays logged in when app is closed and open again	
+- [x] Users can see past the 10 most recent photos
+- [x] User stays logged in when app is closed and open again	
 
-
-The following **additional** features are implemented:
-
-- [ ] List anything else that you can get done to improve the app functionality!
 
 ## Video Walkthrough
 
-Here is a reminder on how to embed Loom videos on GitHub. Feel free to remove this reminder once you upload your README. 
+https://github.com/user-attachments/assets/33d309b2-ffb4-431f-96bc-c72e2d7a4f7c
 
-[Guide](https://www.youtube.com/watch?v=GA92eKlYio4).
 
 ## Notes
 
-Describe any challenges encountered while building the app.
+- Debugging Parse server decoding errors caused by differences between the Swift model and Back4App schema.
+- Linking Alamofire and AlamofireImage properly using Swift Package Manager (resolving AlamofireDynamic.framework error).
 
 ## License
 
-    Copyright [yyyy] [name of copyright owner]
+    Copyright [2025] [Edom Belayneh]
 
     Licensed under the Apache License, Version 2.0 (the "License");
     you may not use this file except in compliance with the License.
