@@ -8,15 +8,25 @@
 import UIKit
 import PhotosUI
 import ParseSwift
+import CoreLocation
 
 
 class PostViewController: UIViewController {
 
+    @IBOutlet weak var openCameraButton: UIButton!
     @IBOutlet weak var previewImage: UIImageView!
     @IBOutlet weak var captionTextField: UITextField!
     @IBOutlet weak var shareButton: UIBarButtonItem!
-    @IBOutlet weak var locationTextField: UITextField!
+    
     private var pickedImage: UIImage?
+    private var extractedLatitude: Double?
+    private var extractedLongitude: Double?
+    private var extractedDateTaken: Date?
+    private var extractedLocation: String?
+
+    
+    private let geocoder = CLGeocoder()
+
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -24,6 +34,30 @@ class PostViewController: UIViewController {
         // Do any additional setup after loading the view.
     }
     
+    @IBAction func onTappedOpenCamera(_ sender: UIButton) {
+//        lable on physical iOS device, not available on simulator.
+        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
+            print("❌📷 Camera not available")
+            return
+        }
+
+        // Instantiate the image picker
+        let imagePicker = UIImagePickerController()
+
+        // Shows the camera (vs the photo library)
+        imagePicker.sourceType = .camera
+
+        // Allows user to edit image within image picker flow (i.e. crop, etc.)
+        // If you don't want to allow editing, you can leave out this line as the default value of `allowsEditing` is false
+        imagePicker.allowsEditing = true
+
+        // The image picker (camera in this case) will return captured photos via it's delegate method to it's assigned delegate.
+        // Delegate assignee must conform and implement both `UIImagePickerControllerDelegate` and `UINavigationControllerDelegate`
+        imagePicker.delegate = self
+
+        // Present the image picker (camera)
+        present(imagePicker, animated: true)
+    }
     @IBAction func onPickedImageTapped(_ sender: UIButton) {
         // Create a configuration object
         var config = PHPickerConfiguration()
@@ -64,12 +98,45 @@ class PostViewController: UIViewController {
         // Set properties
         post.imageFile = imageFile
         post.caption = captionTextField.text
-        post.location = locationTextField.text
-        // Set the user as the current user
         post.user = User.current
+        
+        if let location = extractedLocation {
+            post.location = location
+        }
+        if let lat = extractedLatitude, let lon = extractedLongitude {
+            post.latitude = lat
+            post.longitude = lon
+        }
+        if let dateTaken = extractedDateTaken {
+            post.dateTaken = dateTaken
+        }
 
         // Save object in background (async)
         post.save { [weak self] result in
+            
+            // Get the current user
+            if var currentUser = User.current {
+
+                // Update the `lastPostedDate` property on the user with the current date.
+                currentUser.lastPostedDate = Date()
+
+                // Save updates to the user (async)
+                currentUser.save { [weak self] result in
+                    switch result {
+                    case .success(let user):
+                        print("✅ User Saved! \(user)")
+
+                        // Switch to the main thread for any UI updates
+                        DispatchQueue.main.async {
+                            // Return to previous view controller
+                            self?.navigationController?.popViewController(animated: true)
+                        }
+
+                    case .failure(let error):
+                        self?.showAlert(description: error.localizedDescription)
+                    }
+                }
+            }
 
             // Switch to the main thread for any UI updates
             DispatchQueue.main.async {
@@ -107,43 +174,131 @@ class PostViewController: UIViewController {
 
 extension PostViewController: PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
-        // Dismiss the picker
         picker.dismiss(animated: true)
+        guard let provider = results.first?.itemProvider else { return }
 
-        // Make sure we have a non-nil item provider
-        guard let provider = results.first?.itemProvider,
-           // Make sure the provider can load a UIImage
-           provider.canLoadObject(ofClass: UIImage.self) else { return }
+        // Load preview image
+        if provider.canLoadObject(ofClass: UIImage.self) {
+            provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+                guard let image = object as? UIImage, error == nil else { return }
+                DispatchQueue.main.async {
+                    self?.previewImage.image = image
+                    self?.pickedImage = image
+                }
+            }
+        }
 
-        // Load a UIImage from the provider
-        provider.loadObject(ofClass: UIImage.self) { [weak self] object, error in
+        // Load EXIF metadata
+        if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier) {
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.image.identifier) { [weak self] url, error in
+                guard let url = url else { return }
+                if let data = NSData(contentsOf: url) {
+                    let options = [kCGImageSourceShouldCache as String: kCFBooleanFalse]
+                    if let imgSrc = CGImageSourceCreateWithData(data, options as CFDictionary),
+                       let metadata = CGImageSourceCopyPropertiesAtIndex(imgSrc, 0, options as CFDictionary) as? [CFString: Any] {
 
-           // Make sure we can cast the returned object to a UIImage
-           guard let image = object as? UIImage else {
+                        // GPS
+                        if let gps = metadata[kCGImagePropertyGPSDictionary] as? [CFString: Any] {
+                        if let lat = gps[kCGImagePropertyGPSLatitude] as? Double,
+                            let latRef = gps[kCGImagePropertyGPSLatitudeRef] as? String,
+                            let lon = gps[kCGImagePropertyGPSLongitude] as? Double,
+                            let lonRef = gps[kCGImagePropertyGPSLongitudeRef] as? String {
+                            
+                                var correctedLat = lat
+                                var correctedLon = lon
 
-              // ❌ Unable to cast to UIImage
-              self?.showAlert()
-              return
-           }
+                                // Apply hemisphere correction
+                                if latRef == "S" { correctedLat = -correctedLat }
+                                if lonRef == "W" { correctedLon = -correctedLon }
 
-           // Check for and handle any errors
-           if let error = error {
-               self?.showAlert(description: error.localizedDescription)
-              return
-           } else {
+                                self?.extractedLatitude = correctedLat
+                                self?.extractedLongitude = correctedLon
 
-              // UI updates (like setting image on image view) should be done on main thread
-              DispatchQueue.main.async {
+                                // Now reverse geocode with corrected values
+                                let location = CLLocation(latitude: correctedLat, longitude: correctedLon)
+                                self?.geocoder.reverseGeocodeLocation(location) { placemarks, error in
+                                    if let error = error {
+                                        print("❌ Geocoding error: \(error.localizedDescription)")
+                                        return
+                                    }
 
-                 // Set image on preview image view
-                 self?.previewImage.image = image
+                                    if let placemark = placemarks?.first {
+                                        let city = placemark.locality ?? ""
+                                        let state = placemark.administrativeArea ?? ""
+                                        let country = placemark.country ?? ""
+                                        let placeString = [city, state, country].filter { !$0.isEmpty }.joined(separator: ", ")
 
-                 // Set image to use when saving post
-                 self?.pickedImage = image
-              }
-           }
+                                        DispatchQueue.main.async {
+                                            self?.extractedLocation = placeString
+                                            print("✅ Reverse-geocoded location: \(placeString)")
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+//                        if let gps = metadata[kCGImagePropertyGPSDictionary] as? [CFString: Any] {
+//                            self?.extractedLatitude = gps[kCGImagePropertyGPSLatitude] as? Double
+//                            self?.extractedLongitude = gps[kCGImagePropertyGPSLongitude] as? Double
+                            
+//                            // 🔑 Do reverse geocoding here
+//                            if let lat = self?.extractedLatitude, let lon = self?.extractedLongitude {
+//                                let location = CLLocation(latitude: lat, longitude: lon)
+//                                self?.geocoder.reverseGeocodeLocation(location) { placemarks, error in
+//                                    if let error = error {
+//                                        print("❌ Geocoding error: \(error.localizedDescription)")
+//                                        return
+//                                    }
+//                                    
+//                                    if let placemark = placemarks?.first {
+//                                        let city = placemark.locality ?? ""
+//                                        let state = placemark.administrativeArea ?? ""
+//                                        let country = placemark.country ?? ""
+//                                        let placeString = [city, state, country].filter { !$0.isEmpty }.joined(separator: ", ")
+//                                        
+//                                        DispatchQueue.main.async {
+//                                            self?.extractedLocation = placeString
+//                                            print("✅ Reverse-geocoded location: \(placeString)")
+//                                        }
+//                                    }
+//                                }
+//                            }
+//                        }
+
+                        // Date Taken
+                        if let exif = metadata[kCGImagePropertyExifDictionary] as? [CFString: Any],
+                           let dateString = exif[kCGImagePropertyExifDateTimeOriginal] as? String {
+                            // Convert "2022:05:26 14:28:29" into Date
+                            let formatter = DateFormatter()
+                            formatter.dateFormat = "yyyy:MM:dd HH:mm:ss"
+                            self?.extractedDateTaken = formatter.date(from: dateString)
+                        }
+                    }
+                }
+            }
         }
     }
-    
+}
 
+
+
+extension PostViewController: UIImagePickerControllerDelegate, UINavigationControllerDelegate {
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+
+        // Dismiss the image picker
+        picker.dismiss(animated: true)
+
+        // Get the edited image from the info dictionary (if `allowsEditing = true` for image picker config).
+        // Alternatively, to get the original image, use the `.originalImage` InfoKey instead.
+        guard let image = info[.editedImage] as? UIImage else {
+            print("❌📷 Unable to get image")
+            return
+        }
+
+        // Set image on preview image view
+        previewImage.image = image
+
+        // Set image to use when saving post
+        pickedImage = image
+    }
 }

@@ -12,6 +12,8 @@ import ParseSwift
 class PostCell: UITableViewCell {
 
     
+    @IBOutlet weak var blurView: UIVisualEffectView!
+    @IBOutlet weak var dateLabel: UILabel!
     @IBOutlet weak var postImage: UIImageView!
     @IBOutlet weak var captionLabel: UILabel!
     @IBOutlet weak var locationLabel: UILabel!
@@ -47,10 +49,39 @@ class PostCell: UITableViewCell {
         captionLabel.text = post.caption
         locationLabel.text = post.location
 
-//        // Date
-//        if let date = post.createdAt {
-//            dateLabel.text = DateFormatter.postFormatter.string(from: date)
-//        }
+//      // Date
+        if let date = post.dateTaken {
+            dateLabel.text = "Taken: " + DateFormatter.postFormatter.string(from: date)
+        }
+        
+        // Location
+        if let location = post.location {
+            locationLabel.text = location
+        } else if let lat = post.latitude, let lon = post.longitude {
+            locationLabel.text = "Lat: \(lat), Lon: \(lon)"
+        }
+        
+        
+        // A lot of the following returns optional values so we'll unwrap them all together in one big `if let`
+        // Get the current user.
+        if let currentUser = User.current,
+
+        // Get the date the user last shared a post (cast to Date).
+        let lastPostedDate = currentUser.lastPostedDate,
+
+        // Get the date the given post was created.
+        let postCreatedDate = post.createdAt,
+           
+        // Get the difference in hours between when the given post was created and the current user last posted.
+        let diffHours = Calendar.current.dateComponents([.hour], from: postCreatedDate, to: lastPostedDate).hour {
+
+        // Hide the blur view if the given post was created within 24 hours of the current user's last post. (before or after)
+            blurView.isHidden = abs(diffHours) < 24
+        } else {
+
+            // Default to blur if we can't get or compute the date's above for some reason.
+            blurView.isHidden = false
+        }
 
     }
     
@@ -62,15 +93,6 @@ class PostCell: UITableViewCell {
         // Cancel image request.
         imageDataRequest?.cancel()
     }
-    
-//    override func awakeFromNib() {
-//        super.awakeFromNib()
-//        // Initialization code
-//    }
-//    override func setSelected(_ selected: Bool, animated: Bool) {
-//        super.setSelected(selected, animated: animated)
-//
-//        // Configure the view for the selected state
-//    }
 
 }
+

@@ -19,4 +19,7 @@ struct Post: ParseObject {
     var location: String?
     var user: User?
     var imageFile: ParseFile?
+    var dateTaken: Date?
+    var latitude: Double?
+    var longitude: Double?
 }
