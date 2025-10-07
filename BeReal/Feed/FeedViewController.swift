@@ -17,8 +17,6 @@ class FeedViewController: UIViewController, UITableViewDelegate, UITableViewData
 
     @IBOutlet weak var tableView: UITableView!
         
-    
-    
     @IBAction func onLogOutTapped(_ sender: UIButton) {
         showConfirmLogoutAlert()
         print("Logout tapped")
@@ -36,6 +34,31 @@ class FeedViewController: UIViewController, UITableViewDelegate, UITableViewData
 
         queryPosts()
     }
+    
+    override func prepare(for segue: UIStoryboardSegue, sender: Any?) {
+        if segue.identifier == "ShowCommentsSegue" {
+            let destinationVC = segue.destination as! CommentViewController
+            
+            // If segue was triggered from a button inside the cell
+            if let button = sender as? UIButton {
+                // Find the cell the button belongs to
+                if let cell = button.superview?.superview as? PostCell,
+                   let indexPath = tableView.indexPath(for: cell) {
+                    let selectedPost = post[indexPath.row]
+                    destinationVC.fromPost = selectedPost
+                    print("✅ Passing post to CommentVC via button: \(selectedPost)")
+                }
+            }
+            // If segue triggered by tapping the entire cell
+            else if let indexPath = tableView.indexPathForSelectedRow {
+                let selectedPost = post[indexPath.row]
+                destinationVC.fromPost = selectedPost
+                print("✅ Passing post to CommentVC via cell tap: \(selectedPost)")
+            }
+        }
+    }
+
+
 
     private func queryPosts() {
         // 1. Create a query to fetch Posts

@@ -8,20 +8,15 @@
 import Foundation
 import ParseSwift
 
-struct Post: ParseObject {
+struct Comment: ParseObject {
     var objectId: String?
     var createdAt: Date?
     var updatedAt: Date?
     var ACL: ParseACL?
     var originalData: Data?
     
-    var caption: String?
-    var location: String?
+    var text: String?
+    var post: Post?
     var user: User?
-    var imageFile: ParseFile?
-    var dateTaken: Date?
-    var latitude: Double?
-    var longitude: Double?
-    
-    var comments: [Comment]?
+    var commentDate: Date?
 }
